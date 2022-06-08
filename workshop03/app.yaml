@@ -1,0 +1,148 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bggapp-config
+data:
+  BGG_DB_USER: root
+  BGG_DB_HOST: bggdb-svc
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bggapp-secret
+type: Opaque
+data:
+  BGG_DB_PASSWORD: Y2hhbmdlaXQ=
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bggappv1-deploy
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+        maxSurge: 25%
+        maxUnavailable: 25%
+  selector:
+    matchLabels:
+      name: bggappv1-deploy
+  template:
+    metadata:
+      labels:
+        name: bggappv1-deploy
+    spec:
+      containers:
+      - name: bggapp-container
+        image: stackupiss/bgg-backend:v1
+        args: ["--prefix", "/v1"]
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        envFrom:
+          - secretRef:
+              name: bggapp-secret
+          - configMapRef:
+              name: bggapp-config
+        ports:
+        - containerPort: 3000
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 3000
+            scheme: HTTP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bggappv2-deploy
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+        maxSurge: 25%
+        maxUnavailable: 25%
+  selector:
+    matchLabels:
+      name: bggappv2-deploy
+  template:
+    metadata:
+      labels:
+        name: bggappv2-deploy
+    spec:
+      containers:
+      - name: bggapp-container
+        image: stackupiss/bgg-backend:v2
+        args: ["--prefix", "/v2"]
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        envFrom:
+          - secretRef:
+              name: bggapp-secret
+          - configMapRef:
+              name: bggapp-config
+        ports:
+        - containerPort: 3000
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 3000
+            scheme: HTTP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bggappv1-svc
+spec:
+  type: ClusterIP
+  selector:
+    name: bggappv1-deploy
+  ports:
+  - port: 80
+    targetPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bggappv2-svc
+spec:
+  type: ClusterIP
+  selector:
+    name: bggappv2-deploy
+  ports:
+  - port: 80
+    targetPort: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dov-bear-ing
+  labels:
+    name: dov-bear-ing
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: bgg-139.59.217.220.nip.io
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/v1"
+        backend:
+          service:
+            name: bggappv1-svc
+            port: 
+              number: 80
+      - pathType: Prefix
+        path: "/v2"
+        backend:
+          service:
+            name: bggappv2-svc
+            port: 
+              number: 80
