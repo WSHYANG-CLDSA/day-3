@@ -21,7 +21,7 @@ metadata:
   labels:
     name: dov-bear-deploy
 spec:
-  replicas: 4
+  replicas: 1
   selector:
     matchLabels:
       name: dov-bear-po
@@ -47,6 +47,11 @@ spec:
           envFrom:
             - secretRef:
                 name: dov-bear-secrets
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+
 ---
 apiVersion: v1
 kind: Service
@@ -86,3 +91,24 @@ spec:
             port: 
               number: 80
 
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dov-bear-hpa
+  labels:
+    name: dov-bear-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dov-bear-deploy
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
